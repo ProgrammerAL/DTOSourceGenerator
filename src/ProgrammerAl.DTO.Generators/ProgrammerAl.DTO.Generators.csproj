@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DTOUtilities.Attributes\ProgrammerAl.DTO.Attributes.csproj" />
+    <ProjectReference Include="..\ProgrammerAl.DTO.Attributes\ProgrammerAl.DTO.Attributes.csproj" />
   </ItemGroup>
 
 </Project>

@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30516.212
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProgrammerAl.DTO.Generators", "SourceGeneratorPractice\ProgrammerAl.DTO.Generators.csproj", "{25BCD6E8-EE77-40AA-AE7E-63017081627F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProgrammerAl.DTO.Generators", "ProgrammerAl.DTO.Generators\ProgrammerAl.DTO.Generators.csproj", "{25BCD6E8-EE77-40AA-AE7E-63017081627F}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ConsoleApp", "ConsoleApp\ConsoleApp.csproj", "{D59EFDC7-D4E8-4829-8178-827181E3DD42}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProgrammerAl.DTO.Attributes", "DTOUtilities.Attributes\ProgrammerAl.DTO.Attributes.csproj", "{E3DF296F-A778-447C-BA7D-82FC7E3ACD68}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProgrammerAl.DTO.Attributes", "ProgrammerAl.DTO.Attributes\ProgrammerAl.DTO.Attributes.csproj", "{E3DF296F-A778-447C-BA7D-82FC7E3ACD68}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

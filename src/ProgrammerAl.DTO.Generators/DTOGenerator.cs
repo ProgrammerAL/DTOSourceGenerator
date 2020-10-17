@@ -8,7 +8,6 @@ using System.Text;
 using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using System.Collections.Immutable;
-
 using ProgrammerAl.DTO.Attributes;
 
 namespace ProgrammerAl.DTO.Generators
@@ -26,7 +25,7 @@ namespace ProgrammerAl.DTO.Generators
 
         public void Execute(GeneratorExecutionContext context)
         {
-            //System.Diagnostics.Debugger.Launch();
+            // System.Diagnostics.Debugger.Launch();
 
             if (context.SyntaxReceiver is not SyntaxReceiver receiver)
             {
@@ -342,10 +341,10 @@ namespace {classNamespace}
                     return $"!string.IsNullOrWhiteSpace({property.PropertyName})";
             }
 
-            throw new Exception($"Could not determin how to validate the string property {property.PropertyName}");
+            throw new Exception($"Could not determine how to validate the string property {property.PropertyName}");
         }
 
-        public class SyntaxReceiver : ISyntaxReceiver
+        private class SyntaxReceiver : ISyntaxReceiver
         {
             public List<TypeDeclarationSyntax> CandidateClasses { get; } = new();
 

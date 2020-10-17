@@ -51,11 +51,11 @@ namespace ConsoleApp
     {
         static void Main(string[] args)
         {
-            //var abc = new ConsoleApp.MyDTOClassDTO()
-            //{
-            //    FirstName = null,
-            //    Val = null
-            //};
+            var abc = new ConsoleApp.MyDTOClassDTO()
+            {
+                FirstName = null,
+                Val = null
+            };
 
 
             //var def = new ConsoleApp.MyRecordDTO()
