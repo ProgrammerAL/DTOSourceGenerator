@@ -25,7 +25,7 @@ namespace ProgrammerAl.DTO.Generators
 
         public void Execute(GeneratorExecutionContext context)
         {
-            // System.Diagnostics.Debugger.Launch();
+            //System.Diagnostics.Debugger.Launch();
 
             if (context.SyntaxReceiver is not SyntaxReceiver receiver)
             {
@@ -144,7 +144,11 @@ namespace {classNamespace}
         private string GenerateSpacesForPropertyLines() => "        ";
         private string GenerateSpacesForIsValidChecks() => "                   ";
 
-        private IDtoPropertyIsValidCheckConfig GeneratePropertyIsValidCheckRules(IPropertySymbol propertySymbol, string dataTypeFullName, AttributeSymbols attributeSymbols, ImmutableArray<string> allClassesAddingDto)
+        private IDtoPropertyIsValidCheckConfig GeneratePropertyIsValidCheckRules(
+            IPropertySymbol propertySymbol, 
+            string dataTypeFullName, 
+            AttributeSymbols attributeSymbols, 
+            ImmutableArray<string> allClassesAddingDto)
         {
             var propertyAttributes = propertySymbol.GetAttributes();
             if (DataTypeIsString(dataTypeFullName))
@@ -155,6 +159,10 @@ namespace {classNamespace}
             {
                 return CreateDtoPropertyCheckConfigForDto(propertyAttributes, attributeSymbols);
             }
+            else if (DataTypeIsNullable(dataTypeFullName))
+            { 
+                return new DtoBasicPropertyIsValidCheckConfig(AllowNull: true);
+            }
 
             //INamedTypeSymbol attributeSymbol = compilation.GetTypeByMetadataName("AutoNotify.AutoNotifyAttribute");
 
@@ -162,6 +170,11 @@ namespace {classNamespace}
             //if(propertyAttributes.Any(x => x.AttributeClass?.Equals()))
 
             return CreateDefaultPropertyConfig();
+        }
+
+        private bool DataTypeIsNullable(string dataTypeFullName)
+        {
+            return dataTypeFullName.EndsWith("?");
         }
 
         private IDtoPropertyIsValidCheckConfig CreateDefaultPropertyConfig() => new DtoBasicPropertyIsValidCheckConfig(AllowNull: false);
@@ -339,9 +352,9 @@ namespace {classNamespace}
                     return $"!string.IsNullOrEmpty({property.PropertyName})";
                 case StringIsValidCheckType.RequiresNonWhitespaceText:
                     return $"!string.IsNullOrWhiteSpace({property.PropertyName})";
+                default:
+                    return $"!string.IsNullOrWhiteSpace({property.PropertyName})";
             }
-
-            throw new Exception($"Could not determine how to validate the string property {property.PropertyName}");
         }
 
         private class SyntaxReceiver : ISyntaxReceiver
