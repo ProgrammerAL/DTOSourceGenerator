@@ -8,9 +8,9 @@ namespace ProgrammerAl.DTO.Attributes
     /// Attribute used to mark a class to be included when generating DTO source classes
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-    public class GenerateDTOAttribute : Attribute
+    public class GenerateDtoAttribute : Attribute
     {
-        public GenerateDTOAttribute()
+        public GenerateDtoAttribute()
         {
         }
     }

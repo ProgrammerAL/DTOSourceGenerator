@@ -21,38 +21,21 @@ namespace ProgrammerAl.DTO.Generators
             context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
         }
 
-        private record AttributeSymbols(INamedTypeSymbol DtoAttributeSymbol, INamedTypeSymbol DtoBasicPropertyCheckAttributeSymbol, INamedTypeSymbol DtoPropertyCheckAttributeSymbol, INamedTypeSymbol DtoStringPropertyCheckAttributeSymbol);
-
         public void Execute(GeneratorExecutionContext context)
         {
             //System.Diagnostics.Debugger.Launch();
 
-            if (context.SyntaxReceiver is not SyntaxReceiver receiver)
+            if (context.SyntaxReceiver is not SyntaxReceiver receiver
+                || !receiver.CandidateClasses.Any())
             {
                 return;
             }
 
             var compilation = context.Compilation;
 
-            var dtoAttributesNamespace = GenerateDTOAttributesNamespaceString();
+            var attributeSymbols = LoadAttributeSymbols(compilation);
 
-            var dtoAttributeSymbol = compilation!.GetTypeByMetadataName($"{dtoAttributesNamespace}.{nameof(GenerateDTOAttribute)}");
-
-            var dtoBasicPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName($"{dtoAttributesNamespace}.{nameof(BasicPropertyCheckAttribute)}");
-            var dtoPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName($"{dtoAttributesNamespace}.{nameof(DTOPropertyCheckAttribute)}");
-            var dtoStringPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName($"{dtoAttributesNamespace}.{nameof(StringPropertyCheckAttribute)}");
-
-            if (dtoAttributeSymbol is null
-                || dtoBasicPropertyCheckAttributeSymbol is null
-                || dtoPropertyCheckAttributeSymbol is null
-                || dtoStringPropertyCheckAttributeSymbol is null)
-            {
-                throw new Exception($"Cannot continue {nameof(DTOGenerator)} because the compilation could not find one or more of the required attributes");
-            }
-
-            var attributeSymbols = new AttributeSymbols(dtoAttributeSymbol, dtoBasicPropertyCheckAttributeSymbol, dtoPropertyCheckAttributeSymbol, dtoStringPropertyCheckAttributeSymbol);
-
-            // loop over the candidate fields, and keep the ones that are actually annotated
+            // loop over the candidate fields, and keep the ones that are annotated with the GenerateDTOAttribute
             var newClassSymbols = receiver.CandidateClasses
                 .Select(declaration =>
                 {
@@ -61,12 +44,12 @@ namespace ProgrammerAl.DTO.Generators
 
                     if (classSymbol is null)
                     {
-                        throw new Exception($"Could not load class symbol frin semantic model {declaration}");
+                        throw new Exception($"Could not load class symbol from semantic model {declaration}");
                     }
 
                     if (classSymbol
                         .GetAttributes()
-                        .Any(ad => ad.AttributeClass!.Equals(dtoAttributeSymbol, SymbolEqualityComparer.Default) is true))
+                        .Any(ad => ad.AttributeClass!.Equals(attributeSymbols.DtoAttributeSymbol, SymbolEqualityComparer.Default) is true))
                     {
                         return classSymbol;
                     }
@@ -83,13 +66,28 @@ namespace ProgrammerAl.DTO.Generators
             {
                 var codeText = GenerateDTO(classSymbol, allClassesAddingDto, attributeSymbols);
                 var fileName = GenerateDTOClassFileName(classSymbol);
+
+                //System.Diagnostics.Debugger.Launch();
                 context.AddSource(fileName, codeText);
             }
         }
 
-        private string GenerateDTOAttributesNamespaceString()
+        private AttributeSymbols LoadAttributeSymbols(Compilation compilation)
         {
-            return "ProgrammerAl.DTO.Attributes";
+            var dtoAttributeSymbol = compilation!.GetTypeByMetadataName(typeof(GenerateDtoAttribute).FullName);
+            var dtoBasicPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName(typeof(BasicPropertyCheckAttribute).FullName);
+            var dtoPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName(typeof(DtoPropertyCheckAttribute).FullName);
+            var dtoStringPropertyCheckAttributeSymbol = compilation!.GetTypeByMetadataName(typeof(StringPropertyCheckAttribute).FullName);
+
+            if (dtoAttributeSymbol is null
+                || dtoBasicPropertyCheckAttributeSymbol is null
+                || dtoPropertyCheckAttributeSymbol is null
+                || dtoStringPropertyCheckAttributeSymbol is null)
+            {
+                throw new Exception($"Cannot continue {nameof(DTOGenerator)} because the compilation could not find one or more of the required attributes");
+            }
+
+            return new AttributeSymbols(dtoAttributeSymbol, dtoBasicPropertyCheckAttributeSymbol, dtoPropertyCheckAttributeSymbol, dtoStringPropertyCheckAttributeSymbol);
         }
 
         private SourceText GenerateDTO(INamedTypeSymbol classSymbol, ImmutableArray<string> allClassesAddingDto, AttributeSymbols attributeSymbols)
@@ -102,29 +100,54 @@ namespace ProgrammerAl.DTO.Generators
                 .Cast<IPropertySymbol>()
                 .Select(x =>
                 {
-                    //TODO: Skip checking certain properties based on an Attribute
+                    //TODO: Consider skipping checking certain properties based on an Attribute
 
                     var memberName = x.Name;
+
+                    /*
+                     * Possible data types to consider
+                     * 
+                     * int, string
+                     * int?, string?
+                     * Nullable<int>, Nullable<string>
+                     * Integer, String
+                     * List<int>, List<string>
+                     * int[], string[],
+                     * int[]?, string[]?
+                     * int?[]?, string?[]?
+                     * 
+                     * 
+                     * MyClass
+                     */
 
                     var dataTypeFormatStyle = SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted);
                     var dataTypeFullName = x.Type.ToDisplayString(NullableFlowState.MaybeNull, dataTypeFormatStyle);
 
                     var isValidCheckConfig = GeneratePropertyIsValidCheckRules(x, dataTypeFullName, attributeSymbols, allClassesAddingDto);
 
-                    return new DTOProperty(x, memberName, dataTypeFullName, isValidCheckConfig);
+                    return new DtoProperty(x, memberName, dataTypeFullName, isValidCheckConfig);
                 })
                 .Where(x => x is object)
                 .Select(x => x!)
                 .ToImmutableArray();
 
-            var propertySpaces = GenerateSpacesForPropertyLines();
-            var propertyLines = properties.Select(x => $"{propertySpaces}public {x.FullDataType}? {x.PropertyName} {{ get; set; }}");
+            string sourceText = GenerateDtoClassSourceText(classSymbol, allClassesAddingDto, className, classNamespace, properties);
 
-            var propertiesString = string.Join(Environment.NewLine, propertyLines);
+            return SourceText.From(sourceText, encoding: Encoding.UTF8);
+        }
 
+        private string GenerateDtoClassSourceText(INamedTypeSymbol classSymbol, ImmutableArray<string> allClassesAddingDto, string className, string classNamespace, ImmutableArray<DtoProperty> properties)
+        {
+            var propertiesString = string.Join(Environment.NewLine, properties.Select(x => x.GeneratePropertyCodeLine()));
             var checkIsValidCode = GenerateCheckIsValidCode(classSymbol, properties, allClassesAddingDto);
+            var sourceText = GenerateClassSourceText(className, classNamespace, propertiesString, checkIsValidCode);
 
-            var sourceText = $@"
+            return sourceText;
+        }
+
+        private static string GenerateClassSourceText(string className, string classNamespace, string propertiesString, string checkIsValidCode)
+        {
+            return $@"
 namespace {classNamespace}
 {{
     public class {className}
@@ -137,12 +160,7 @@ namespace {classNamespace}
         }}
     }}
 }}";
-
-            return SourceText.From(sourceText, encoding: Encoding.UTF8);
         }
-
-        private string GenerateSpacesForPropertyLines() => "        ";
-        private string GenerateSpacesForIsValidChecks() => "                   ";
 
         private IDtoPropertyIsValidCheckConfig GeneratePropertyIsValidCheckRules(
             IPropertySymbol propertySymbol, 
@@ -155,7 +173,7 @@ namespace {classNamespace}
             {
                 return CreateDtoPropertyCheckConfigForString(propertyAttributes, attributeSymbols);
             }
-            else if (DataTypeIsAnotherDTO(allClassesAddingDto, dataTypeFullName))
+            else if (DataTypeIsAnotherDto(allClassesAddingDto, dataTypeFullName))
             {
                 return CreateDtoPropertyCheckConfigForDto(propertyAttributes, attributeSymbols);
             }
@@ -184,7 +202,7 @@ namespace {classNamespace}
             var dtoPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
             if (dtoPropertyAttribute is object)
             {
-                var checkIsValidValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(DTOPropertyCheckAttribute.CheckIsValid)).Value;
+                var checkIsValidValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(DtoPropertyCheckAttribute.CheckIsValid)).Value;
                 var checkIsValid = (bool)checkIsValidValue.Value!;
 
                 var allowNullValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
@@ -199,7 +217,7 @@ namespace {classNamespace}
                 return propertyCheckConfig;
             }
 
-            return new DtoPropertyIsValidCheckConfig(CheckIsValid: DTOPropertyCheckAttribute.DefaultCheckIsValid, AllowNull: BasicPropertyCheckAttribute.DefaultAllowNull);
+            return new DtoPropertyIsValidCheckConfig(CheckIsValid: DtoPropertyCheckAttribute.DefaultCheckIsValid, AllowNull: BasicPropertyCheckAttribute.DefaultAllowNull);
         }
 
         private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForString(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
@@ -249,7 +267,7 @@ namespace {classNamespace}
         }
 
 
-        private bool DataTypeIsAnotherDTO(ImmutableArray<string> allDtoNamesBeingGenerated, string dataTypeFullName)
+        private bool DataTypeIsAnotherDto(ImmutableArray<string> allDtoNamesBeingGenerated, string dataTypeFullName)
         {
             return allDtoNamesBeingGenerated.Any(x => string.Equals(x, dataTypeFullName, StringComparison.OrdinalIgnoreCase));
         }
@@ -261,7 +279,7 @@ namespace {classNamespace}
                 || string.Equals("System.String", dataTypeFullName, StringComparison.OrdinalIgnoreCase);
         }
 
-        private string GenerateCheckIsValidCode(INamedTypeSymbol classSymbol, ImmutableArray<DTOProperty> properties, ImmutableArray<string> allClassesBeingGenerated)
+        private string GenerateCheckIsValidCode(INamedTypeSymbol classSymbol, ImmutableArray<DtoProperty> properties, ImmutableArray<string> allClassesBeingGenerated)
         {
             var propertyChecks = properties.Select(property =>
                 {
@@ -280,7 +298,7 @@ namespace {classNamespace}
                 .Where(x => x is object)
                 .ToImmutableArray();
 
-            var allChecksLine = string.Join($"{Environment.NewLine}{GenerateSpacesForIsValidChecks()}&& ", propertyChecks);
+            var allChecksLine = string.Join($"{Environment.NewLine}{GeneratedClassStrings.SpacesForIsValidChecks}&& ", propertyChecks);
 
             return allChecksLine;
         }
@@ -302,18 +320,7 @@ namespace {classNamespace}
             return $"{classNamespace}.{classSymbol.Name}";
         }
 
-        private record DTOProperty(
-            IPropertySymbol PropertySymbol,
-            string PropertyName,
-            string FullDataType,
-            IDtoPropertyIsValidCheckConfig IsValidCheckConfig);
-
-        private interface IDtoPropertyIsValidCheckConfig { }
-        private record DtoBasicPropertyIsValidCheckConfig(bool AllowNull) : IDtoPropertyIsValidCheckConfig;
-        private record DtoPropertyIsValidCheckConfig(bool AllowNull, bool CheckIsValid) : IDtoPropertyIsValidCheckConfig;
-        private record DtoStringPropertyIsValidCheckConfig(StringIsValidCheckType StringIsValidCheck) : IDtoPropertyIsValidCheckConfig;
-
-        private string? DeterminBasicPropertyCheck(DTOProperty property, DtoBasicPropertyIsValidCheckConfig validityCheckConfig)
+        private string? DeterminBasicPropertyCheck(DtoProperty property, DtoBasicPropertyIsValidCheckConfig validityCheckConfig)
         {
             if (validityCheckConfig.AllowNull)
             {
@@ -325,11 +332,11 @@ namespace {classNamespace}
             else
             {
                 //Make sure it's not null
-                return $"{property.PropertyName} is object";
+                return $"{property.PropertyName} is not null";
             }
         }
 
-        private string? DeterminDtoPropertyCheck(DTOProperty property, DtoPropertyIsValidCheckConfig dtoValidityCheck)
+        private string? DeterminDtoPropertyCheck(DtoProperty property, DtoPropertyIsValidCheckConfig dtoValidityCheck)
         {
             if (dtoValidityCheck.CheckIsValid)
             {
@@ -340,7 +347,7 @@ namespace {classNamespace}
             return DeterminBasicPropertyCheck(property, basicValidityCheck);
         }
 
-        private string? DeterminStringPropertyCheck(DTOProperty property, DtoStringPropertyIsValidCheckConfig validityCheckConfig)
+        private string? DeterminStringPropertyCheck(DtoProperty property, DtoStringPropertyIsValidCheckConfig validityCheckConfig)
         {
             switch (validityCheckConfig.StringIsValidCheck)
             {
@@ -382,9 +389,4 @@ namespace {classNamespace}
             }
         }
     }
-}
-
-namespace System.Runtime.CompilerServices
-{
-    public class IsExternalInit { }
 }

@@ -6,7 +6,7 @@ using System.Xml.Serialization;
 
 namespace ConsoleApp
 {
-    [GenerateDTO]
+    [GenerateDto]
     public class MyDTOClass
     {
         [StringPropertyCheck(StringIsValidCheckType = StringIsValidCheckType.Unknown)]
@@ -25,17 +25,17 @@ namespace ConsoleApp
         public string StringCheck_RequiresNonWhitespaceText { get; set; }
 
         public int IntVal { get; set; }
-        public int? NullableIntVal { get; set; }
+        //Ignore nullables for now
+        //public int? NullableIntVal { get; set; }
 
-        public MyChildClass MyChild { get; set; }
+        //public MyChildClass MyChild { get; set; }
     }
 
-    [GenerateDTO]
-    public class MyChildClass
-    {
-        public string FirstName { get; set; }
-    }
-
+    //[GenerateDTO]
+    //public class MyChildClass
+    //{
+    //    public string FirstName { get; set; }
+    //}
 
     //[ProgrammerAl.DTO.Utilities.Attributes]
     //public record MyRecord(string Name, int Val);
@@ -53,8 +53,7 @@ namespace ConsoleApp
         {
             var abc = new ConsoleApp.MyDTOClassDTO()
             {
-                FirstName = null,
-                Val = null
+                StringCheck_Unknown = "unknown"
             };
 
 

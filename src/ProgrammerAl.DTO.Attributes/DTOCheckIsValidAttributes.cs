@@ -22,11 +22,11 @@ namespace ProgrammerAl.DTO.Attributes
     /// Attribute for a property in a DTO, where that property's data type is also a DTO, to specify is the CheckIsValid() method will be called when the parent class's CheckIsValid() is called. Default is true
     /// </summary>
     [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
-    public class DTOPropertyCheckAttribute : BasicPropertyCheckAttribute
+    public class DtoPropertyCheckAttribute : BasicPropertyCheckAttribute
     {
         public const bool DefaultCheckIsValid = true;
 
-        public DTOPropertyCheckAttribute()
+        public DtoPropertyCheckAttribute()
             : base()
         {
             CheckIsValid = DefaultCheckIsValid;
