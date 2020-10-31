@@ -67,8 +67,10 @@ namespace ProgrammerAl.DTO.Generators
                 var codeText = GenerateDTO(classSymbol, allClassesAddingDto, attributeSymbols);
                 var fileName = GenerateDTOClassFileName(classSymbol);
 
-                //System.Diagnostics.Debugger.Launch();
                 context.AddSource(fileName, codeText);
+
+                //For Local Debugging
+                System.IO.File.WriteAllText(@$"c:/temp/GeneratedDTOs/{fileName}", codeText.ToString());
             }
         }
 
@@ -98,11 +100,9 @@ namespace ProgrammerAl.DTO.Generators
             var properties = classSymbol.GetMembers()
                 .Where(x => x is IPropertySymbol)
                 .Cast<IPropertySymbol>()
-                .Select(x =>
+                .Select(propertySymbol =>
                 {
                     //TODO: Consider skipping checking certain properties based on an Attribute
-
-                    var memberName = x.Name;
 
                     /*
                      * Possible data types to consider
@@ -120,15 +120,14 @@ namespace ProgrammerAl.DTO.Generators
                      * MyClass
                      */
 
-                    var dataTypeFormatStyle = SymbolDisplayFormat.FullyQualifiedFormat.WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted);
-                    var dataTypeFullName = x.Type.ToDisplayString(NullableFlowState.MaybeNull, dataTypeFormatStyle);
+                    var isValidCheckConfig = GeneratePropertyIsValidCheckRules(propertySymbol, attributeSymbols, allClassesAddingDto);
 
-                    var isValidCheckConfig = GeneratePropertyIsValidCheckRules(x, dataTypeFullName, attributeSymbols, allClassesAddingDto);
-
-                    return new DtoProperty(x, memberName, dataTypeFullName, isValidCheckConfig);
+                    return new DtoProperty(
+                        PropertySymbol: propertySymbol, 
+                        PropertyName: propertySymbol.Name, 
+                        FullDataType: GenerateDataTypeFullNameFromProperty(propertySymbol),
+                        IsValidCheckConfig: isValidCheckConfig);
                 })
-                .Where(x => x is object)
-                .Select(x => x!)
                 .ToImmutableArray();
 
             string sourceText = GenerateDtoClassSourceText(classSymbol, allClassesAddingDto, className, classNamespace, properties);
@@ -163,22 +162,22 @@ namespace {classNamespace}
         }
 
         private IDtoPropertyIsValidCheckConfig GeneratePropertyIsValidCheckRules(
-            IPropertySymbol propertySymbol, 
-            string dataTypeFullName, 
-            AttributeSymbols attributeSymbols, 
+            IPropertySymbol propertySymbol,
+            AttributeSymbols attributeSymbols,
             ImmutableArray<string> allClassesAddingDto)
         {
             var propertyAttributes = propertySymbol.GetAttributes();
-            if (DataTypeIsString(dataTypeFullName))
+
+            if (DataTypeIsString(propertySymbol))
             {
                 return CreateDtoPropertyCheckConfigForString(propertyAttributes, attributeSymbols);
             }
-            else if (DataTypeIsAnotherDto(allClassesAddingDto, dataTypeFullName))
+            else if (DataTypeIsAnotherDto(propertySymbol, allClassesAddingDto))
             {
                 return CreateDtoPropertyCheckConfigForDto(propertyAttributes, attributeSymbols);
             }
-            else if (DataTypeIsNullable(dataTypeFullName))
-            { 
+            else if (DataTypeIsNullable(propertySymbol))
+            {
                 return new DtoBasicPropertyIsValidCheckConfig(AllowNull: true);
             }
 
@@ -190,8 +189,16 @@ namespace {classNamespace}
             return CreateDefaultPropertyConfig();
         }
 
-        private bool DataTypeIsNullable(string dataTypeFullName)
+        private static string GenerateDataTypeFullNameFromProperty(IPropertySymbol propertySymbol)
         {
+            return propertySymbol.Type.ToDisplayString(NullableFlowState.MaybeNull, SymbolDisplayFormats.PropertyDataTypeDisplayFormat);
+        }
+
+        private bool DataTypeIsNullable(IPropertySymbol propertySymbol)
+        {
+            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
+
+            //TODO: Check for Nullable<> too I guess
             return dataTypeFullName.EndsWith("?");
         }
 
@@ -267,13 +274,17 @@ namespace {classNamespace}
         }
 
 
-        private bool DataTypeIsAnotherDto(ImmutableArray<string> allDtoNamesBeingGenerated, string dataTypeFullName)
+        private bool DataTypeIsAnotherDto(IPropertySymbol propertySymbol, ImmutableArray<string> allDtoNamesBeingGenerated)
         {
+            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
+
             return allDtoNamesBeingGenerated.Any(x => string.Equals(x, dataTypeFullName, StringComparison.OrdinalIgnoreCase));
         }
 
-        private bool DataTypeIsString(string dataTypeFullName)
+        private bool DataTypeIsString(IPropertySymbol propertySymbol)
         {
+            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
+
             return
                 string.Equals("string", dataTypeFullName, StringComparison.OrdinalIgnoreCase)
                 || string.Equals("System.String", dataTypeFullName, StringComparison.OrdinalIgnoreCase);
@@ -306,7 +317,7 @@ namespace {classNamespace}
         private string GenerateDTOClassFileName(INamedTypeSymbol classSymbol)
         {
             var className = GenerateDTOClassName(classSymbol);
-            return $"{className}DTO.cs";
+            return $"{className}.cs";
         }
 
         private string GenerateDTOClassName(INamedTypeSymbol classSymbol)
@@ -373,8 +384,6 @@ namespace {classNamespace}
             /// </summary>
             public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
             {
-                //System.Diagnostics.Debugger.Launch();
-
                 // any field with at least one attribute is a candidate for property generation
                 if (syntaxNode is ClassDeclarationSyntax classDeclarationSyntax
                     && classDeclarationSyntax.AttributeLists.Count > 0)

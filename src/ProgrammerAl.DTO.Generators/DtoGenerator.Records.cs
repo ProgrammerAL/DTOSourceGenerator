@@ -8,13 +8,6 @@ using ProgrammerAl.DTO.Attributes;
 
 namespace ProgrammerAl.DTO.Generators
 {
-    internal static class GeneratedClassStrings
-    {
-        public const string SpacesForPropertyLines = "        ";
-        public const string SpacesForIsValidChecks = "                   ";
-        //private const string DtoAttributesNamespaceString = "ProgrammerAl.DTO.Attributes";
-    }
-
     internal record DtoProperty(
         IPropertySymbol PropertySymbol,
         string PropertyName,
