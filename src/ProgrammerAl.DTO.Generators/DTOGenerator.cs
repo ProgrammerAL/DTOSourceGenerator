@@ -23,8 +23,6 @@ namespace ProgrammerAl.DTO.Generators
 
         public void Execute(GeneratorExecutionContext context)
         {
-            //System.Diagnostics.Debugger.Launch();
-
             if (context.SyntaxReceiver is not SyntaxReceiver receiver
                 || !receiver.CandidateClasses.Any())
             {
@@ -97,6 +95,7 @@ namespace ProgrammerAl.DTO.Generators
             var className = GenerateDTOClassName(classSymbol);
             var classNamespace = classSymbol.ContainingNamespace.ToDisplayString();
 
+            var isValidCheckCodeConfigGenerator = new IsValidCheckCodeConfigGenerator();
             var properties = classSymbol.GetMembers()
                 .Where(x => x is IPropertySymbol)
                 .Cast<IPropertySymbol>()
@@ -120,25 +119,25 @@ namespace ProgrammerAl.DTO.Generators
                      * MyClass
                      */
 
-                    var isValidCheckConfig = GeneratePropertyIsValidCheckRules(propertySymbol, attributeSymbols, allClassesAddingDto);
+                    var isValidCheckConfig = isValidCheckCodeConfigGenerator.GeneratePropertyIsValidCheckRules(propertySymbol, attributeSymbols, allClassesAddingDto);
 
                     return new DtoProperty(
-                        PropertySymbol: propertySymbol, 
-                        PropertyName: propertySymbol.Name, 
-                        FullDataType: GenerateDataTypeFullNameFromProperty(propertySymbol),
+                        PropertySymbol: propertySymbol,
+                        PropertyName: propertySymbol.Name,
+                        FullDataType: PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol),
                         IsValidCheckConfig: isValidCheckConfig);
                 })
                 .ToImmutableArray();
 
-            string sourceText = GenerateDtoClassSourceText(classSymbol, allClassesAddingDto, className, classNamespace, properties);
+            string sourceText = GenerateDtoClassSourceText(className, classNamespace, properties);
 
             return SourceText.From(sourceText, encoding: Encoding.UTF8);
         }
 
-        private string GenerateDtoClassSourceText(INamedTypeSymbol classSymbol, ImmutableArray<string> allClassesAddingDto, string className, string classNamespace, ImmutableArray<DtoProperty> properties)
+        private string GenerateDtoClassSourceText(string className, string classNamespace, ImmutableArray<DtoProperty> properties)
         {
             var propertiesString = string.Join(Environment.NewLine, properties.Select(x => x.GeneratePropertyCodeLine()));
-            var checkIsValidCode = GenerateCheckIsValidCode(classSymbol, properties, allClassesAddingDto);
+            var checkIsValidCode = GenerateCheckIsValidCode(properties);
             var sourceText = GenerateClassSourceText(className, classNamespace, propertiesString, checkIsValidCode);
 
             return sourceText;
@@ -161,159 +160,6 @@ namespace {classNamespace}
 }}";
         }
 
-        private IDtoPropertyIsValidCheckConfig GeneratePropertyIsValidCheckRules(
-            IPropertySymbol propertySymbol,
-            AttributeSymbols attributeSymbols,
-            ImmutableArray<string> allClassesAddingDto)
-        {
-            var propertyAttributes = propertySymbol.GetAttributes();
-
-            if (DataTypeIsString(propertySymbol))
-            {
-                return CreateDtoPropertyCheckConfigForString(propertyAttributes, attributeSymbols);
-            }
-            else if (DataTypeIsAnotherDto(propertySymbol, allClassesAddingDto))
-            {
-                return CreateDtoPropertyCheckConfigForDto(propertyAttributes, attributeSymbols);
-            }
-            else if (DataTypeIsNullable(propertySymbol))
-            {
-                return new DtoBasicPropertyIsValidCheckConfig(AllowNull: true);
-            }
-
-            //INamedTypeSymbol attributeSymbol = compilation.GetTypeByMetadataName("AutoNotify.AutoNotifyAttribute");
-
-            //var propertyAttributes = propertySymbol.GetAttributes();
-            //if(propertyAttributes.Any(x => x.AttributeClass?.Equals()))
-
-            return CreateDefaultPropertyConfig();
-        }
-
-        private static string GenerateDataTypeFullNameFromProperty(IPropertySymbol propertySymbol)
-        {
-            return propertySymbol.Type.ToDisplayString(NullableFlowState.MaybeNull, SymbolDisplayFormats.PropertyDataTypeDisplayFormat);
-        }
-
-        private bool DataTypeIsNullable(IPropertySymbol propertySymbol)
-        {
-            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
-
-            //TODO: Check for Nullable<> too I guess
-            return dataTypeFullName.EndsWith("?");
-        }
-
-        private IDtoPropertyIsValidCheckConfig CreateDefaultPropertyConfig() => new DtoBasicPropertyIsValidCheckConfig(AllowNull: false);
-
-        private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForDto(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
-        {
-            var dtoPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
-            if (dtoPropertyAttribute is object)
-            {
-                var checkIsValidValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(DtoPropertyCheckAttribute.CheckIsValid)).Value;
-                var checkIsValid = (bool)checkIsValidValue.Value!;
-
-                var allowNullValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
-                var allowNull = (bool)allowNullValue.Value!;
-
-                return new DtoPropertyIsValidCheckConfig(allowNull, checkIsValid);
-            }
-
-            DtoBasicPropertyIsValidCheckConfig? propertyCheckConfig = CreateBasicPropertyCheckFromAttribute(propertyAttributes, attributeSymbols);
-            if (propertyCheckConfig is object)
-            {
-                return propertyCheckConfig;
-            }
-
-            return new DtoPropertyIsValidCheckConfig(CheckIsValid: DtoPropertyCheckAttribute.DefaultCheckIsValid, AllowNull: BasicPropertyCheckAttribute.DefaultAllowNull);
-        }
-
-        private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForString(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
-        {
-            var stringPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoStringPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
-            if (stringPropertyAttribute is object)
-            {
-                var value = stringPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(StringPropertyCheckAttribute.StringIsValidCheckType)).Value;
-                var stringCheckType = (StringIsValidCheckType)(value.Value!);
-
-                return new DtoStringPropertyIsValidCheckConfig(stringCheckType);
-            }
-
-            //A string could instead have the DtoBasicPropertyCheckAttribute attribute applied. Check for that too
-            DtoBasicPropertyIsValidCheckConfig? propertyCheckConfig = CreateBasicPropertyCheckFromAttribute(propertyAttributes, attributeSymbols);
-            if (propertyCheckConfig is object && propertyCheckConfig.AllowNull)
-            {
-                return new DtoStringPropertyIsValidCheckConfig(StringIsValidCheckType.AllowNull);
-            }
-
-            return new DtoStringPropertyIsValidCheckConfig(StringPropertyCheckAttribute.DefaultStringIsValidCheckType);
-        }
-
-        private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForBasicProperty(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
-        {
-            DtoBasicPropertyIsValidCheckConfig? propertyCheckConfig = CreateBasicPropertyCheckFromAttribute(propertyAttributes, attributeSymbols);
-            if (propertyCheckConfig is object)
-            {
-                return propertyCheckConfig;
-            }
-
-            return new DtoBasicPropertyIsValidCheckConfig(AllowNull: false);
-        }
-
-        private DtoBasicPropertyIsValidCheckConfig? CreateBasicPropertyCheckFromAttribute(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
-        {
-            var basicPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoBasicPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
-            if (basicPropertyAttribute is object)
-            {
-                var allowNullValue = basicPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
-                var allowNull = (bool)allowNullValue.Value!;
-
-                return new DtoBasicPropertyIsValidCheckConfig(allowNull);
-            }
-
-            return null;
-        }
-
-
-        private bool DataTypeIsAnotherDto(IPropertySymbol propertySymbol, ImmutableArray<string> allDtoNamesBeingGenerated)
-        {
-            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
-
-            return allDtoNamesBeingGenerated.Any(x => string.Equals(x, dataTypeFullName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private bool DataTypeIsString(IPropertySymbol propertySymbol)
-        {
-            string dataTypeFullName = GenerateDataTypeFullNameFromProperty(propertySymbol);
-
-            return
-                string.Equals("string", dataTypeFullName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals("System.String", dataTypeFullName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private string GenerateCheckIsValidCode(INamedTypeSymbol classSymbol, ImmutableArray<DtoProperty> properties, ImmutableArray<string> allClassesBeingGenerated)
-        {
-            var propertyChecks = properties.Select(property =>
-                {
-                    switch (property.IsValidCheckConfig)
-                    {
-                        case DtoStringPropertyIsValidCheckConfig stringValidityCheck:
-                            return DeterminStringPropertyCheck(property, stringValidityCheck);
-                        case DtoPropertyIsValidCheckConfig dtoValidityCheck:
-                            return DeterminDtoPropertyCheck(property, dtoValidityCheck);
-                        case DtoBasicPropertyIsValidCheckConfig basicValidityCheck:
-                            return DeterminBasicPropertyCheck(property, basicValidityCheck);
-                    }
-
-                    throw new Exception("This shouldn't happen");
-                })
-                .Where(x => x is object)
-                .ToImmutableArray();
-
-            var allChecksLine = string.Join($"{Environment.NewLine}{GeneratedClassStrings.SpacesForIsValidChecks}&& ", propertyChecks);
-
-            return allChecksLine;
-        }
-
         private string GenerateDTOClassFileName(INamedTypeSymbol classSymbol)
         {
             var className = GenerateDTOClassName(classSymbol);
@@ -331,48 +177,16 @@ namespace {classNamespace}
             return $"{classNamespace}.{classSymbol.Name}";
         }
 
-        private string? DeterminBasicPropertyCheck(DtoProperty property, DtoBasicPropertyIsValidCheckConfig validityCheckConfig)
+        private string GenerateCheckIsValidCode(ImmutableArray<DtoProperty> properties)
         {
-            if (validityCheckConfig.AllowNull)
-            {
-                return null;
-            }
-            //else if (validityCheckConfig.IsCollection)
-            //{ 
-            //}
-            else
-            {
-                //Make sure it's not null
-                return $"{property.PropertyName} is not null";
-            }
-        }
+            var isValidCheckCodeGenerator = new IsValidCheckCodeGenerator();
+            var propertyChecks = properties.Select(property => isValidCheckCodeGenerator.GenerateCheckIsValidCode(property))
+                .Where(x => x is object)
+                .ToImmutableArray();
 
-        private string? DeterminDtoPropertyCheck(DtoProperty property, DtoPropertyIsValidCheckConfig dtoValidityCheck)
-        {
-            if (dtoValidityCheck.CheckIsValid)
-            {
-                return $"{property.PropertyName}?.CheckIsValid() is true";
-            }
+            var allChecksLine = string.Join($"{Environment.NewLine}{GeneratedClassStrings.SpacesForIsValidChecks}&& ", propertyChecks);
 
-            var basicValidityCheck = new DtoBasicPropertyIsValidCheckConfig(dtoValidityCheck.AllowNull);
-            return DeterminBasicPropertyCheck(property, basicValidityCheck);
-        }
-
-        private string? DeterminStringPropertyCheck(DtoProperty property, DtoStringPropertyIsValidCheckConfig validityCheckConfig)
-        {
-            switch (validityCheckConfig.StringIsValidCheck)
-            {
-                case StringIsValidCheckType.AllowNull:
-                    return null;
-                case StringIsValidCheckType.AllowEmptyString:
-                    return $"{property.PropertyName} is object";
-                case StringIsValidCheckType.AllowWhenOnlyWhiteSpace:
-                    return $"!string.IsNullOrEmpty({property.PropertyName})";
-                case StringIsValidCheckType.RequiresNonWhitespaceText:
-                    return $"!string.IsNullOrWhiteSpace({property.PropertyName})";
-                default:
-                    return $"!string.IsNullOrWhiteSpace({property.PropertyName})";
-            }
+            return allChecksLine;
         }
 
         private class SyntaxReceiver : ISyntaxReceiver

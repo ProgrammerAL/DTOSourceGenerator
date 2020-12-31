@@ -8,7 +8,7 @@ using ProgrammerAl.DTO.Attributes;
 
 namespace ProgrammerAl.DTO.Generators
 {
-    internal record DtoProperty(
+    public record DtoProperty(
         IPropertySymbol PropertySymbol,
         string PropertyName,
         string FullDataType,
@@ -27,20 +27,12 @@ namespace ProgrammerAl.DTO.Generators
         }
     }
 
-    //internal record DtoProperty
-    //{
-    //    public IPropertySymbol PropertySymbol { get; init; }
-    //    public string PropertyName { get; init; }
-    //    public string FullDataType { get; init; }
-    //    public IDtoPropertyIsValidCheckConfig IsValidCheckConfig { get; init; }
-    //}
+    public interface IDtoPropertyIsValidCheckConfig { }
+    public record DtoBasicPropertyIsValidCheckConfig(bool AllowNull) : IDtoPropertyIsValidCheckConfig;
+    public record DtoPropertyIsValidCheckConfig(bool AllowNull, bool CheckIsValid) : IDtoPropertyIsValidCheckConfig;
+    public record DtoStringPropertyIsValidCheckConfig(StringIsValidCheckType StringIsValidCheck) : IDtoPropertyIsValidCheckConfig;
 
-    internal interface IDtoPropertyIsValidCheckConfig { }
-    internal record DtoBasicPropertyIsValidCheckConfig(bool AllowNull) : IDtoPropertyIsValidCheckConfig;
-    internal record DtoPropertyIsValidCheckConfig(bool AllowNull, bool CheckIsValid) : IDtoPropertyIsValidCheckConfig;
-    internal record DtoStringPropertyIsValidCheckConfig(StringIsValidCheckType StringIsValidCheck) : IDtoPropertyIsValidCheckConfig;
-
-    internal record AttributeSymbols(INamedTypeSymbol DtoAttributeSymbol, INamedTypeSymbol DtoBasicPropertyCheckAttributeSymbol, INamedTypeSymbol DtoPropertyCheckAttributeSymbol, INamedTypeSymbol DtoStringPropertyCheckAttributeSymbol);
+    public record AttributeSymbols(INamedTypeSymbol DtoAttributeSymbol, INamedTypeSymbol DtoBasicPropertyCheckAttributeSymbol, INamedTypeSymbol DtoPropertyCheckAttributeSymbol, INamedTypeSymbol DtoStringPropertyCheckAttributeSymbol);
 }
 
 namespace System.Runtime.CompilerServices
