@@ -123,8 +123,6 @@ namespace ProgrammerAl.DTO.Generators
 
                     return new DtoProperty(
                         PropertySymbol: propertySymbol,
-                        PropertyName: propertySymbol.Name,
-                        FullDataType: PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol),
                         IsValidCheckConfig: isValidCheckConfig);
                 })
                 .ToImmutableArray();

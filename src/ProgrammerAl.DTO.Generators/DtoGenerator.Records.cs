@@ -10,10 +10,11 @@ namespace ProgrammerAl.DTO.Generators
 {
     public record DtoProperty(
         IPropertySymbol PropertySymbol,
-        string PropertyName,
-        string FullDataType,
         IDtoPropertyIsValidCheckConfig IsValidCheckConfig)
     {
+        public string PropertyName { get; } = PropertySymbol.Name;
+        public string FullDataType { get; } = PropertyUtilities.GenerateDataTypeFullNameFromProperty(PropertySymbol);
+
         /// <summary>
         /// HARD CODED TO FALSE FOR NOW - Meaning the nullable mark (is "?") is added to every property in the generated DTO class
         /// TODO: Figure out how to tell if the parent class is already nullable and then use that
