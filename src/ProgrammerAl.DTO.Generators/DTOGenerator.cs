@@ -21,22 +21,28 @@ namespace ProgrammerAl.DTO.Generators
             context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
         }
 
+        internal record DtoCandidate(TypeDeclarationSyntax TypeDeclaration, bool IsRecord);
+        internal record DtoClassInfo(TypeDeclarationSyntax TypeDeclaration, bool IsRecord, INamedTypeSymbol ClassSymbol);
+
         public void Execute(GeneratorExecutionContext context)
         {
             if (context.SyntaxReceiver is not SyntaxReceiver receiver
-                || !receiver.CandidateClasses.Any())
+                || !receiver.DtoCandidates.Any())
             {
                 return;
             }
+
+            //System.Diagnostics.Debugger.Launch();
 
             var compilation = context.Compilation;
 
             var attributeSymbols = LoadAttributeSymbols(compilation);
 
             // loop over the candidate fields, and keep the ones that are annotated with the GenerateDTOAttribute
-            var newClassSymbols = receiver.CandidateClasses
-                .Select(declaration =>
+            var newClassInfos = receiver.DtoCandidates
+                .Select(candidate =>
                 {
+                    var declaration = candidate.TypeDeclaration;
                     SemanticModel classModel = compilation.GetSemanticModel(declaration.SyntaxTree);
                     var classSymbol = classModel.GetDeclaredSymbol(declaration);
 
@@ -49,7 +55,7 @@ namespace ProgrammerAl.DTO.Generators
                         .GetAttributes()
                         .Any(ad => ad.AttributeClass!.Equals(attributeSymbols.DtoAttributeSymbol, SymbolEqualityComparer.Default) is true))
                     {
-                        return classSymbol;
+                        return new DtoClassInfo(candidate.TypeDeclaration, candidate.IsRecord, classSymbol);
                     }
 
                     return null;
@@ -58,12 +64,12 @@ namespace ProgrammerAl.DTO.Generators
                 .Select(x => x!)
                 .ToImmutableArray();
 
-            var allClassesAddingDto = newClassSymbols.Select(x => GenerateFullClassNameString(x)).ToImmutableArray();
+            var allClassesAddingDto = newClassInfos.Select(x => GenerateFullClassNameString(x.ClassSymbol)).ToImmutableArray();
 
-            foreach (var classSymbol in newClassSymbols)
+            foreach (var newClassInfo in newClassInfos)
             {
-                var codeText = GenerateDTO(classSymbol, allClassesAddingDto, attributeSymbols);
-                var fileName = GenerateDTOClassFileName(classSymbol);
+                var codeText = GenerateDTO(newClassInfo, allClassesAddingDto, attributeSymbols);
+                var fileName = GenerateDTOClassFileName(newClassInfo.ClassSymbol);
 
                 context.AddSource(fileName, codeText);
 
@@ -90,10 +96,13 @@ namespace ProgrammerAl.DTO.Generators
             return new AttributeSymbols(dtoAttributeSymbol, dtoBasicPropertyCheckAttributeSymbol, dtoPropertyCheckAttributeSymbol, dtoStringPropertyCheckAttributeSymbol);
         }
 
-        private SourceText GenerateDTO(INamedTypeSymbol classSymbol, ImmutableArray<string> allClassesAddingDto, AttributeSymbols attributeSymbols)
+        private SourceText GenerateDTO(DtoClassInfo newClassInfo, ImmutableArray<string> allClassesAddingDto, AttributeSymbols attributeSymbols)
         {
+            var classSymbol = newClassInfo.ClassSymbol;
             var className = GenerateDTOClassName(classSymbol);
             var classNamespace = classSymbol.ContainingNamespace.ToDisplayString();
+
+            bool newClassIsRecord = newClassInfo.IsRecord;
 
             var isValidCheckCodeConfigGenerator = new IsValidCheckCodeConfigGenerator();
             var properties = classSymbol.GetMembers()
@@ -101,7 +110,12 @@ namespace ProgrammerAl.DTO.Generators
                 .Cast<IPropertySymbol>()
                 .Select(propertySymbol =>
                 {
-                    //TODO: Consider skipping checking certain properties based on an Attribute
+                    //Skip any properties auto-generated for records
+                    if (newClassIsRecord
+                        && string.Equals(propertySymbol.Name, "EqualityContract", StringComparison.Ordinal))//Casing matters for this
+                    {
+                        return null;
+                    }
 
                     /*
                      * Possible data types to consider
@@ -125,6 +139,8 @@ namespace ProgrammerAl.DTO.Generators
                         PropertySymbol: propertySymbol,
                         IsValidCheckConfig: isValidCheckConfig);
                 })
+                .Where(x => x is object)
+                .Select(x => x!)
                 .ToImmutableArray();
 
             string sourceText = GenerateDtoClassSourceText(className, classNamespace, properties);
@@ -189,7 +205,7 @@ namespace {classNamespace}
 
         private class SyntaxReceiver : ISyntaxReceiver
         {
-            public List<TypeDeclarationSyntax> CandidateClasses { get; } = new();
+            public List<DtoCandidate> DtoCandidates { get; } = new();
 
             /// <summary>
             /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
@@ -200,12 +216,12 @@ namespace {classNamespace}
                 if (syntaxNode is ClassDeclarationSyntax classDeclarationSyntax
                     && classDeclarationSyntax.AttributeLists.Count > 0)
                 {
-                    CandidateClasses.Add(classDeclarationSyntax);
+                    DtoCandidates.Add(new DtoCandidate(classDeclarationSyntax, IsRecord: false));
                 }
                 else if (syntaxNode is RecordDeclarationSyntax recordDeclarationSyntax
                     && recordDeclarationSyntax.AttributeLists.Count > 0)
                 {
-                    CandidateClasses.Add(recordDeclarationSyntax);
+                    DtoCandidates.Add(new DtoCandidate(recordDeclarationSyntax, IsRecord: true));
                 }
             }
         }

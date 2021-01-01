@@ -24,6 +24,8 @@ namespace ConsoleApp
         [StringPropertyCheck(StringIsValidCheckType = StringIsValidCheckType.RequiresNonWhitespaceText)]
         public string StringCheck_RequiresNonWhitespaceText { get; set; }
 
+        public string StringCheck_NoAttribute_SameAndUnknown { get; set; }
+
         public int IntVal { get; set; }
         //Ignore nullables for now
         //public int? NullableIntVal { get; set; }
@@ -37,8 +39,8 @@ namespace ConsoleApp
     //    public string FirstName { get; set; }
     //}
 
-    //[ProgrammerAl.DTO.Utilities.Attributes]
-    //public record MyRecord(string Name, int Val);
+    [GenerateDto]
+    public record MyRecord(string Name, int Val);
 
     //[SoapAttribute]
     //public class MyNonDTOClass
@@ -51,17 +53,16 @@ namespace ConsoleApp
     {
         static void Main(string[] args)
         {
-            var abc = new ConsoleApp.MyDTOClassDTO()
-            {
-                StringCheck_Unknown = "unknown"
-            };
-
-
-            //var def = new ConsoleApp.MyRecordDTO()
+            //var abc = new ConsoleApp.MyDTOClassDTO()
             //{
-            //    Name = null,
-            //    Val = null
+            //    StringCheck_Unknown = "unknown"
             //};
+
+            var def = new ConsoleApp.MyRecordDTO()
+            {
+                Name = null,
+                Val = null
+            };
             _ = Console.ReadLine();
         }
     }
