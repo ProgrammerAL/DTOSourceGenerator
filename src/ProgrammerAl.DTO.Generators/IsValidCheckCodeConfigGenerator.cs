@@ -18,30 +18,29 @@ namespace ProgrammerAl.DTO.Generators
             ImmutableArray<string> allClassesAddingDto)
         {
             var propertyAttributes = propertySymbol.GetAttributes();
+            string fullDataTypeName = PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol);
 
-            if (DataTypeIsString(propertySymbol))
+            if (DataTypeIsNullable(fullDataTypeName))
+            {
+                return CreateAllowNullPropertyConfig();
+            }
+            else if (DataTypeIsString(fullDataTypeName))
             {
                 return CreateDtoPropertyCheckConfigForString(propertyAttributes, attributeSymbols);
             }
-            else if (DataTypeIsAnotherDto(propertySymbol, allClassesAddingDto))
+            else if (DataTypeIsAnotherDto(fullDataTypeName, allClassesAddingDto))
             {
                 return CreateDtoPropertyCheckConfigForDto(propertyAttributes, attributeSymbols);
-            }
-            else if (DataTypeIsNullable(propertySymbol))
-            {
-                return new DtoBasicPropertyIsValidCheckConfig(AllowNull: true);
             }
 
             return CreateDefaultPropertyConfig();
         }
 
-        private bool DataTypeIsString(IPropertySymbol propertySymbol)
+        private bool DataTypeIsString(string fullDataTypeName)
         {
-            string dataTypeFullName = PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol);
-
             return
-                string.Equals("string", dataTypeFullName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals("System.String", dataTypeFullName, StringComparison.OrdinalIgnoreCase);
+                string.Equals("string", fullDataTypeName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals("System.String", fullDataTypeName, StringComparison.OrdinalIgnoreCase);
         }
 
         private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForString(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
@@ -49,7 +48,7 @@ namespace ProgrammerAl.DTO.Generators
             var stringPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoStringPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
             if (stringPropertyAttribute is object)
             {
-                var value = stringPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(StringPropertyCheckAttribute.StringIsValidCheckType)).Value;
+                var value = stringPropertyAttribute.NamedArguments.FirstOrDefault(x => x.Key == nameof(StringPropertyCheckAttribute.StringIsValidCheckType)).Value;
                 var stringCheckType = (StringIsValidCheckType)(value.Value!);
 
                 return new DtoStringPropertyIsValidCheckConfig(stringCheckType);
@@ -77,19 +76,15 @@ namespace ProgrammerAl.DTO.Generators
         }
 
 
-        private bool DataTypeIsAnotherDto(IPropertySymbol propertySymbol, ImmutableArray<string> allDtoNamesBeingGenerated)
+        private bool DataTypeIsAnotherDto(string fullDataTypeName, ImmutableArray<string> allDtoNamesBeingGenerated)
         {
-            string dataTypeFullName = PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol);
-
-            return allDtoNamesBeingGenerated.Any(x => string.Equals(x, dataTypeFullName, StringComparison.OrdinalIgnoreCase));
+            return allDtoNamesBeingGenerated.Any(x => string.Equals(x, fullDataTypeName, StringComparison.OrdinalIgnoreCase));
         }
 
-        private bool DataTypeIsNullable(IPropertySymbol propertySymbol)
+        private bool DataTypeIsNullable(string fullDataTypeName)
         {
-            string dataTypeFullName = PropertyUtilities.GenerateDataTypeFullNameFromProperty(propertySymbol);
-
             //TODO: Check for Nullable<> too I guess
-            return dataTypeFullName.EndsWith("?");
+            return fullDataTypeName.EndsWith("?");
         }
 
         private DtoBasicPropertyIsValidCheckConfig? CreateBasicPropertyCheckFromAttribute(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
@@ -97,7 +92,7 @@ namespace ProgrammerAl.DTO.Generators
             var basicPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoBasicPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
             if (basicPropertyAttribute is object)
             {
-                var allowNullValue = basicPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
+                var allowNullValue = basicPropertyAttribute.NamedArguments.FirstOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
                 var allowNull = (bool)allowNullValue.Value!;
 
                 return new DtoBasicPropertyIsValidCheckConfig(allowNull);
@@ -108,15 +103,17 @@ namespace ProgrammerAl.DTO.Generators
 
         private IDtoPropertyIsValidCheckConfig CreateDefaultPropertyConfig() => new DtoBasicPropertyIsValidCheckConfig(AllowNull: false);
 
+        private IDtoPropertyIsValidCheckConfig CreateAllowNullPropertyConfig() => new DtoBasicPropertyIsValidCheckConfig(AllowNull: true);
+
         private IDtoPropertyIsValidCheckConfig CreateDtoPropertyCheckConfigForDto(ImmutableArray<AttributeData> propertyAttributes, AttributeSymbols attributeSymbols)
         {
             var dtoPropertyAttribute = propertyAttributes.FirstOrDefault(x => x.AttributeClass?.Equals(attributeSymbols.DtoPropertyCheckAttributeSymbol, SymbolEqualityComparer.Default) is true);
             if (dtoPropertyAttribute is object)
             {
-                var checkIsValidValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(DtoPropertyCheckAttribute.CheckIsValid)).Value;
+                var checkIsValidValue = dtoPropertyAttribute.NamedArguments.FirstOrDefault(x => x.Key == nameof(DtoPropertyCheckAttribute.CheckIsValid)).Value;
                 var checkIsValid = (bool)checkIsValidValue.Value!;
 
-                var allowNullValue = dtoPropertyAttribute.NamedArguments.SingleOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
+                var allowNullValue = dtoPropertyAttribute.NamedArguments.FirstOrDefault(x => x.Key == nameof(BasicPropertyCheckAttribute.AllowNull)).Value;
                 var allowNull = (bool)allowNullValue.Value!;
 
                 return new DtoPropertyIsValidCheckConfig(allowNull, checkIsValid);
